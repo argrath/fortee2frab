@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frab Schedule Timetable Viewer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .controls input[type="text"] {
+            width: 60%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .controls button {
+            padding: 8px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .controls button:hover {
+            background-color: #45a049;
+        }
+        
+        .filter-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-controls select {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .conference-info {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .conference-info h2 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+        
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        /* タイムテーブルのスタイル */
+        .timetable-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        .timetable {
+            border-collapse: collapse;
+            min-width: 100%;
+            background-color: white;
+        }
+        
+        .timetable th {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .timetable th.time-header {
+            background-color: #e8e8e8;
+            width: 100px;
+            min-width: 100px;
+            left: 0;
+            z-index: 11;
+        }
+        
+        .timetable td {
+            border: 1px solid #ddd;
+            padding: 0;
+            vertical-align: top;
+            position: relative;
+        }
+        
+        .timetable td.time-cell {
+            background-color: #f9f9f9;
+            padding: 10px;
+            text-align: center;
+            font-weight: 500;
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background-color: #f5f5f5;
+        }
+        
+        /* イベントセルの背景色 */
+        .event-cell {
+            padding: 0 !important;
+        }
+        
+        .event-cell.workshop {
+            background-color: #f3e5f5;
+        }
+        
+        .event-cell.keynote {
+            background-color: #fff3e0;
+        }
+        
+        .event-cell.talk {
+            background-color: #e8f5e9;
+        }
+        
+        .event-cell.panel {
+            background-color: #fce4ec;
+        }
+        
+        .event-cell.lightning {
+            background-color: #e0f2f1;
+        }
+        
+        .event-block {
+            border: none;
+            border-radius: 0;
+            padding: 12px;
+            margin: 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            overflow: hidden;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: transparent;
+        }
+        
+        .event-block:hover {
+            opacity: 0.85;
+            transform: scale(1.02);
+        }
+        
+        /* イベントセルのホバー時の枠線 */
+        .event-cell:hover {
+            box-shadow: inset 0 0 0 3px rgba(0,0,0,0.2);
+        }
+        
+        .event-title {
+            font-weight: 600;
+            font-size: 0.95em;
+            margin-bottom: 6px;
+            color: #1a237e;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            line-height: 1.3;
+        }
+        
+        .event-speaker {
+            font-size: 0.85em;
+            color: #424242;
+            margin-bottom: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        
+        .event-meta {
+            font-size: 0.8em;
+            color: #616161;
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .event-track {
+            display: inline-block;
+            background-color: rgba(0,0,0,0.15);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 500;
+        }
+        
+        .event-duration {
+            font-weight: 500;
+        }
+        
+        .empty-slot {
+            background-color: #fafafa;
+            height: 100%;
+            min-height: 60px;
+        }
+        
+        /* モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .day-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .day-tab {
+            padding: 10px 20px;
+            background-color: #f5f5f5;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+        }
+        
+        .day-tab:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .day-tab.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        @media print {
+            .controls, .filter-controls, .day-tabs {
+                display: none;
+            }
+            
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+            
+            .timetable {
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Frab Schedule Timetable Viewer</h1>
+        
+        <div class="controls">
+            <input type="text" id="xmlUrl" 
+                   value="https://pretalx.devconf.info/devconf-cz-2025/schedule/export/schedule.xml" 
+                   placeholder="XMLファイルのURLを入力">
+            <button onclick="loadSchedule()">スケジュールを読み込む</button>
+            
+            <div class="filter-controls" id="filterControls" style="display: none;">
+                <label>
+                    トラック:
+                    <select id="trackFilter" onchange="renderCurrentDay()">
+                        <option value="">すべて</option>
+                    </select>
+                </label>
+                <label>
+                    種別:
+                    <select id="typeFilter" onchange="renderCurrentDay()">
+                        <option value="">すべて</option>
+                    </select>
+                </label>
+                <label>
+                    言語:
+                    <select id="languageFilter" onchange="renderCurrentDay()">
+                        <option value="">すべて</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+        
+        <div id="conferenceInfo" class="conference-info" style="display: none;"></div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            データを読み込んでいます...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="dayTabs" class="day-tabs" style="display: none;"></div>
+        
+        <div id="timetableContainer" class="timetable-container"></div>
+    </div>
+    
+    <!-- イベント詳細モーダル -->
+    <div id="eventModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let scheduleData = null;
+        let allEvents = [];
+        let currentDay = null;
+        let dayEvents = {};
+        
+        async function loadSchedule() {
+            const url = document.getElementById('xmlUrl').value;
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            
+            try {
+                // CORSプロキシを使用
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('ファイルの取得に失敗しました');
+                }
+                
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                scheduleData = parser.parseFromString(xmlText, 'text/xml');
+                
+                if (scheduleData.querySelector('parsererror')) {
+                    throw new Error('XMLの解析に失敗しました');
+                }
+                
+                parseSchedule();
+                
+            } catch (err) {
+                error.textContent = `エラー: ${err.message}`;
+                error.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function parseSchedule() {
+            const schedule = scheduleData.querySelector('schedule');
+            const conference = schedule.querySelector('conference');
+            
+            displayConferenceInfo(conference);
+            
+            // すべてのイベントを収集
+            dayEvents = {};
+            const tracks = new Set();
+            const types = new Set();
+            const languages = new Set();
+            const days = schedule.querySelectorAll('day');
+            
+            days.forEach(day => {
+                const date = day.getAttribute('date');
+                dayEvents[date] = {
+                    rooms: new Set(),
+                    events: [],
+                    timeSlots: new Set()
+                };
+                
+                day.querySelectorAll('room').forEach(room => {
+                    const roomName = room.getAttribute('name');
+                    dayEvents[date].rooms.add(roomName);
+                    
+                    room.querySelectorAll('event').forEach(event => {
+                        const eventData = parseEvent(event, date, roomName);
+                        dayEvents[date].events.push(eventData);
+                        dayEvents[date].timeSlots.add(eventData.start);
+                        
+                        if (eventData.track) tracks.add(eventData.track);
+                        if (eventData.type) types.add(eventData.type);
+                        if (eventData.language) languages.add(eventData.language);
+                    });
+                });
+            });
+            
+            setupFilters(tracks, types, languages);
+            setupDayTabs(Object.keys(dayEvents));
+        }
+        
+        function parseEvent(event, date, roomName) {
+            return {
+                id: event.getAttribute('id'),
+                date: date,
+                room: roomName,
+                start: event.querySelector('start')?.textContent || '',
+                duration: event.querySelector('duration')?.textContent || '',
+                title: event.querySelector('title')?.textContent || '',
+                subtitle: event.querySelector('subtitle')?.textContent || '',
+                track: event.querySelector('track')?.textContent || '',
+                type: event.querySelector('type')?.textContent || '',
+                language: event.querySelector('language')?.textContent || '',
+                abstract: event.querySelector('abstract')?.textContent || '',
+                description: event.querySelector('description')?.textContent || '',
+                persons: Array.from(event.querySelectorAll('person')).map(p => p.textContent)
+            };
+        }
+        
+        function displayConferenceInfo(conference) {
+            const infoDiv = document.getElementById('conferenceInfo');
+            const title = conference.querySelector('title')?.textContent || '';
+            const subtitle = conference.querySelector('subtitle')?.textContent || '';
+            const venue = conference.querySelector('venue')?.textContent || '';
+            const city = conference.querySelector('city')?.textContent || '';
+            
+            infoDiv.innerHTML = `
+                <h2>${title}</h2>
+                ${subtitle ? `<p>${subtitle}</p>` : ''}
+                <p><strong>会場:</strong> ${venue}, ${city}</p>
+            `;
+            infoDiv.style.display = 'block';
+        }
+        
+        function setupFilters(tracks, types, languages) {
+            // トラックフィルター
+            const trackFilter = document.getElementById('trackFilter');
+            trackFilter.innerHTML = '<option value="">すべて</option>';
+            Array.from(tracks).sort().forEach(track => {
+                const option = document.createElement('option');
+                option.value = track;
+                option.textContent = track;
+                trackFilter.appendChild(option);
+            });
+            // タイプフィルター
+            const typeFilter = document.getElementById('typeFilter');
+            typeFilter.innerHTML = '<option value="">すべて</option>';
+            Array.from(types).sort().forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                typeFilter.appendChild(option);
+            });
+            
+            // 言語フィルター
+            const languageFilter = document.getElementById('languageFilter');
+            languageFilter.innerHTML = '<option value="">すべて</option>';
+            Array.from(languages).sort().forEach(language => {
+                const option = document.createElement('option');
+                option.value = language;
+                option.textContent = language;
+                languageFilter.appendChild(option);
+            });
+            
+            document.getElementById('filterControls').style.display = 'block';
+        }
+        
+        function setupDayTabs(days) {
+            const tabsContainer = document.getElementById('dayTabs');
+            tabsContainer.innerHTML = '';
+            
+            days.sort().forEach((day, index) => {
+                const tab = document.createElement('button');
+                tab.className = 'day-tab';
+                tab.textContent = formatDate(day);
+                tab.onclick = () => selectDay(day);
+                
+                if (index === 0) {
+                    tab.className += ' active';
+                    currentDay = day;
+                }
+                
+                tabsContainer.appendChild(tab);
+            });
+            
+            tabsContainer.style.display = 'flex';
+            
+            if (currentDay) {
+                renderTimetable(currentDay);
+            }
+        }
+        
+        function selectDay(day) {
+            currentDay = day;
+            
+            // タブのアクティブ状態を更新
+            document.querySelectorAll('.day-tab').forEach((tab, index) => {
+                const days = Object.keys(dayEvents).sort();
+                if (days[index] === day) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            
+            renderTimetable(day);
+        }
+        
+        function renderCurrentDay() {
+            if (currentDay) {
+                renderTimetable(currentDay);
+            }
+        }
+        
+        function renderTimetable(day) {
+            const container = document.getElementById('timetableContainer');
+            const dayData = dayEvents[day];
+            
+            if (!dayData) {
+                container.innerHTML = '<p>データがありません</p>';
+                return;
+            }
+            
+            // フィルター適用
+            const trackFilter = document.getElementById('trackFilter').value;
+            const typeFilter = document.getElementById('typeFilter').value;
+            const languageFilter = document.getElementById('languageFilter').value;
+            
+            let filteredEvents = dayData.events.filter(event => {
+                if (trackFilter && event.track !== trackFilter) return false;
+                if (typeFilter && event.type !== typeFilter) return false;
+                if (languageFilter && event.language !== languageFilter) return false;
+                return true;
+            });
+            
+            // 時間スロットを生成（5分単位）
+            const timeSlots = generateTimeSlots(filteredEvents);
+            const rooms = Array.from(dayData.rooms).sort();
+            
+            // テーブルを作成
+            let html = '<table class="timetable">';
+            
+            // ヘッダー行
+            html += '<thead><tr>';
+            html += '<th class="time-header">時刻</th>';
+            rooms.forEach(room => {
+                html += `<th>${room}</th>`;
+            });
+            html += '</tr></thead>';
+            
+            html += '<tbody>';
+            
+            // 各時間スロット
+            timeSlots.forEach(slot => {
+                html += '<tr>';
+                html += `<td class="time-cell">${slot}</td>`;
+                
+                rooms.forEach(room => {
+                    const event = findEventForSlot(filteredEvents, room, slot);
+                    
+                    if (event) {
+                        const rowspan = calculateRowspan(event.duration);
+                        const eventClass = getEventClass(event.type);
+                        
+                        html += `<td rowspan="${rowspan}" class="event-cell ${eventClass}">
+                            <div class="event-block" onclick="showEventDetails('${event.id}')">
+                                <div class="event-title">${event.title}</div>
+                                <div class="event-speaker">${event.persons.join(', ')}</div>
+                                <div class="event-meta">
+                                    <span class="event-duration">${event.duration}</span>
+                                    ${event.track ? `<span class="event-track">${event.track}</span>` : ''}
+                                </div>
+                            </div>
+                        </td>`;
+                    } else if (!isSlotOccupied(filteredEvents, room, slot)) {
+                        html += '<td class="empty-slot"></td>';
+                    }
+                });
+                
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            
+            container.innerHTML = html;
+        }
+        
+        function generateTimeSlots(events) {
+            const slots = new Set();
+            const startTimes = [];
+            const endTimes = [];
+            
+            events.forEach(event => {
+                const start = timeToMinutes(event.start);
+                const duration = parseDuration(event.duration);
+                const end = start + duration;
+                
+                startTimes.push(start);
+                endTimes.push(end);
+            });
+            
+            if (startTimes.length === 0) return [];
+            
+            const minTime = Math.min(...startTimes);
+            const maxTime = Math.max(...endTimes);
+            
+            // 5分刻みで時間スロットを生成
+            for (let minutes = minTime; minutes <= maxTime; minutes += 5) {
+                slots.add(minutesToTime(minutes));
+            }
+            
+            return Array.from(slots).sort();
+        }
+        
+        function findEventForSlot(events, room, slot) {
+            const slotMinutes = timeToMinutes(slot);
+            
+            return events.find(event => {
+                if (event.room !== room) return false;
+                
+                const eventStart = timeToMinutes(event.start);
+                const eventDuration = parseDuration(event.duration);
+                
+                return eventStart === slotMinutes;
+            });
+        }
+        
+        function isSlotOccupied(events, room, slot) {
+            const slotMinutes = timeToMinutes(slot);
+            
+            return events.some(event => {
+                if (event.room !== room) return false;
+                
+                const eventStart = timeToMinutes(event.start);
+                const eventDuration = parseDuration(event.duration);
+                const eventEnd = eventStart + eventDuration;
+                
+                return eventStart < slotMinutes && slotMinutes < eventEnd;
+            });
+        }
+        
+        function calculateRowspan(duration) {
+            const minutes = parseDuration(duration);
+            return Math.ceil(minutes / 5);
+        }
+        
+        function timeToMinutes(time) {
+            const [hours, minutes] = time.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+        
+        function minutesToTime(minutes) {
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+        }
+        
+        function parseDuration(duration) {
+            const [hours, minutes] = duration.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+        
+        function getEventClass(type) {
+            const typeMap = {
+                'keynote': 'keynote',
+                'workshop': 'workshop',
+                'talk': 'talk',
+                'lecture': 'talk',
+                'panel': 'panel',
+                'lightning talk': 'lightning',
+                'lightning': 'lightning'
+            };
+            
+            return typeMap[type?.toLowerCase()] || 'talk';
+        }
+        
+        function showEventDetails(eventId) {
+            let event = null;
+            
+            // すべての日からイベントを探す
+            for (const day in dayEvents) {
+                const found = dayEvents[day].events.find(e => e.id === eventId);
+                if (found) {
+                    event = found;
+                    break;
+                }
+            }
+            
+            if (!event) return;
+            
+            const modal = document.getElementById('eventModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            modalContent.innerHTML = `
+                <h2>${event.title}</h2>
+                ${event.subtitle ? `<h3 style="color: #666; font-size: 1.1em;">${event.subtitle}</h3>` : ''}
+                
+                <div style="margin: 20px 0;">
+                    <p><strong>発表者:</strong> ${event.persons.join(', ')}</p>
+                    <p><strong>日時:</strong> ${formatDate(event.date)} ${event.start} (${event.duration})</p>
+                    <p><strong>部屋:</strong> ${event.room}</p>
+                    ${event.track ? `<p><strong>トラック:</strong> ${event.track}</p>` : ''}
+                    ${event.type ? `<p><strong>種別:</strong> ${event.type}</p>` : ''}
+                    ${event.language ? `<p><strong>言語:</strong> ${event.language}</p>` : ''}
+                </div>
+                
+                ${event.abstract ? `
+                    <div style="margin-top: 20px;">
+                        <h4>概要</h4>
+                        <p style="white-space: pre-wrap;">${event.abstract}</p>
+                    </div>
+                ` : ''}
+                
+                ${event.description ? `
+                    <div style="margin-top: 20px;">
+                        <h4>詳細</h4>
+                        <p style="white-space: pre-wrap;">${event.description}</p>
+                    </div>
+                ` : ''}
+            `;
+            
+            modal.style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('eventModal').style.display = 'none';
+        }
+        
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const options = { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                weekday: 'long'
+            };
+            return date.toLocaleDateString('ja-JP', options);
+        }
+        
+        // モーダルの外側をクリックしたら閉じる
+        window.onclick = function(event) {
+            const modal = document.getElementById('eventModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+        
+        // ページ読み込み時に自動的にスケジュールを読み込む
+        window.onload = function() {
+            loadSchedule();
+        };
+    </script>
+</body>
+</html>
